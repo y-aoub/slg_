@@ -32,7 +32,10 @@ class SelogerClient:
 
     def __init__(self, config: ScraperConfig | None = None) -> None:
         self.config = config or ScraperConfig()
-        datadome = self.config.require_datadome()
+        # Le cookie est optionnel : pour le SSR, Datadome en émet un au premier
+        # contact (utile derrière un proxy résidentiel, ex. sur Apify). Il reste
+        # nécessaire pour l'API christie/count (header x-datadome-clientid).
+        datadome = self.config.datadome_cookie
         self._client = httpx.Client(
             base_url=self.config.base_url,
             timeout=self.config.request_timeout,
@@ -43,7 +46,7 @@ class SelogerClient:
                 "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
                 "Accept-Encoding": "gzip, deflate, br",
             },
-            cookies={"datadome": datadome},
+            cookies={"datadome": datadome} if datadome else None,
         )
         self._datadome = datadome
         self._last_request_at = 0.0
@@ -128,7 +131,11 @@ class SelogerClient:
         return resp.text
 
     def post_christie_count(self, body: dict) -> dict:
-        """POST ``/search-bff/christie/count`` → ``{nb, aggregations, ...}``."""
+        """POST ``/search-bff/christie/count`` → ``{nb, aggregations, ...}``.
+
+        Nécessite un cookie Datadome (réutilisé comme header ``x-datadome-clientid``).
+        """
+        datadome = self.config.require_datadome()
         resp = self._request(
             "POST",
             "/search-bff/christie/count",
@@ -138,7 +145,7 @@ class SelogerClient:
                 "Content-Type": "application/json",
                 "Origin": self.config.base_url,
                 "Referer": f"{self.config.base_url}/list.htm",
-                "x-datadome-clientid": self._datadome,
+                "x-datadome-clientid": datadome,
             },
         )
         return resp.json()
