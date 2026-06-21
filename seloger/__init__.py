@@ -17,6 +17,7 @@ Exemple :
 from __future__ import annotations
 
 from .config import ScraperConfig
+from .detail import DetailContact, ListingDetail
 from .exceptions import (
     DatadomeBlocked,
     ParseError,
@@ -41,6 +42,8 @@ __all__ = [
     "resolve_insee",
     "Place",
     "Listing",
+    "ListingDetail",
+    "DetailContact",
     "Pricing",
     "Contact",
     "SearchPage",

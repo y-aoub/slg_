@@ -8,8 +8,9 @@ from collections.abc import Iterator
 
 from .client import SelogerClient
 from .config import ScraperConfig
+from .detail import ListingDetail
 from .models import Listing, SearchPage
-from .parser import parse_search_page
+from .parser import parse_listing_detail, parse_search_page
 from .query import SearchQuery
 
 logger = logging.getLogger("seloger.scraper")
@@ -53,6 +54,25 @@ class SelogerScraper:
         return self._client.post_christie_count(query.to_christie_body())
 
     # ----- annonces (SSR) ------------------------------------------------------
+
+    def get_listing(self, url_or_listing: "str | Listing") -> ListingDetail:
+        """Récupère le **détail complet** d'une annonce (description, critères,
+        DPE, transports, toutes les photos, contact agence…).
+
+        Args:
+            url_or_listing: l'URL de l'annonce (``Listing.url`` / ``classifiedURL``)
+                ou directement un :class:`~seloger.models.Listing`.
+
+        Note: optimisé pour les annonces ``seloger.com``. Les annonces pointant
+        vers un site sœur (ex. bellesdemeures.com) peuvent ne pas être supportées.
+        """
+        url = url_or_listing.url if isinstance(url_or_listing, Listing) else url_or_listing
+        if not url:
+            raise ValueError("URL d'annonce manquante.")
+        html = self._client.get_detail_html(url)
+        detail = parse_listing_detail(html, url=url)
+        logger.info("Détail %s : %s (%s)", detail.legacy_id or detail.id, detail.title, detail.city)
+        return detail
 
     def search_page(self, query: SearchQuery, page: int = 1) -> SearchPage:
         """Récupère et parse une page de résultats."""

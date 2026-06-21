@@ -14,6 +14,8 @@ authors = [
 keywords = ["slg_", "seloger", "scraper", "immobilier"]
 dependencies = [
     "httpx>=0.27",
+    "brotli>=1.1",      # décodage des réponses Content-Encoding: br
+    "zstandard>=0.22",  # décodage des réponses Content-Encoding: zstd
 ]
 
 [project.urls]

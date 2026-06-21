@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 
+from .detail import ListingDetail
 from .exceptions import ParseError
 from .models import Listing, Pagination, SearchPage
 
@@ -20,6 +21,11 @@ from .models import Listing, Pagination, SearchPage
 # correctement les échappements internes (\" \\ \uXXXX …).
 _INITIAL_DATA_RE = re.compile(
     r'window\["initialData"\]\s*=\s*JSON\.parse\(("(?:\\.|[^"\\])*")\)'
+)
+
+# Même mécanique pour la page de détail (framework UFRN).
+_DETAIL_DATA_RE = re.compile(
+    r'window\["__UFRN_LIFECYCLE_SERVERREQUEST__"\]\s*=\s*JSON\.parse\(("(?:\\.|[^"\\])*")\)'
 )
 
 # Cartes réellement exploitables (les pubs ont cardType "native", "ad", etc.).
@@ -81,3 +87,29 @@ def parse_search_page(html: str) -> SearchPage:
         private_seller_count=aggs.get("privateSeller"),
         professional_seller_count=aggs.get("professionalSeller"),
     )
+
+
+def extract_detail_data(html: str) -> dict:
+    """Extrait l'objet ``classified`` depuis le HTML d'une page de détail."""
+    match = _DETAIL_DATA_RE.search(html)
+    if not match:
+        raise ParseError(
+            'Motif __UFRN_LIFECYCLE_SERVERREQUEST__ introuvable : page de challenge '
+            "Datadome, structure modifiée, ou annonce expirée."
+        )
+    try:
+        data = json.loads(json.loads(match.group(1)))
+    except json.JSONDecodeError as exc:  # pragma: no cover - défensif
+        raise ParseError(f"Échec du décodage du détail : {exc}") from exc
+    classified = ((data.get("app_cldp") or {}).get("data") or {}).get("classified")
+    if not classified:
+        error = ((data.get("app_cldp") or {}).get("data") or {}).get("error")
+        raise ParseError(f"Annonce indisponible (error={error}).")
+    return classified
+
+
+def parse_listing_detail(html: str, url: str | None = None) -> ListingDetail:
+    """Parse le HTML d'une page de détail en :class:`ListingDetail`."""
+    detail = ListingDetail.from_classified(extract_detail_data(html))
+    detail.url = url
+    return detail

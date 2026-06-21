@@ -44,7 +44,9 @@ class SelogerClient:
             headers={
                 "User-Agent": self.config.user_agent,
                 "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-                "Accept-Encoding": "gzip, deflate, br",
+                # NB: on laisse httpx fixer Accept-Encoding selon les décodeurs
+                # installés (gzip/deflate/br/zstd) pour éviter de réclamer un
+                # encodage qu'on ne saurait pas décoder.
             },
             cookies={"datadome": datadome} if datadome else None,
         )
@@ -126,6 +128,15 @@ class SelogerClient:
         resp = self._request(
             "GET",
             f"/list.htm?{querystring}",
+            headers={"Accept": "text/html,application/xhtml+xml"},
+        )
+        return resp.text
+
+    def get_detail_html(self, url: str) -> str:
+        """GET une page de détail d'annonce (URL relative ou absolue) → HTML brut."""
+        resp = self._request(
+            "GET",
+            url,
             headers={"Accept": "text/html,application/xhtml+xml"},
         )
         return resp.text
