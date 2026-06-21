@@ -30,6 +30,18 @@ def test_querystring_pagination_and_ranges():
     assert "surface=20/NaN" in qs
 
 
+def test_postal_codes_places():
+    q = SearchQuery(insee_codes=[750056], postal_codes=["75011", "75012"])
+    places = q.to_christie_body()["places"]
+    assert places == [{"inseeCodes": [750056], "postalCodes": ["75011", "75012"]}]
+    qs = q.to_querystring()
+    assert '"postalCodes":["75011","75012"]' in qs
+
+    # postal codes only
+    q2 = SearchQuery(insee_codes=[], postal_codes=["75011"])
+    assert q2.to_christie_body()["places"] == [{"postalCodes": ["75011"]}]
+
+
 def test_christie_body():
     q = SearchQuery(
         project=ProjectType.BUY,

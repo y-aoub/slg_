@@ -27,7 +27,7 @@ from .exceptions import (
     RateLimited,
     SelogerError,
 )
-from .geocoding import Place, geocode, resolve_insee
+from .geocoding import Place, geocode, resolve_insee, resolve_place_ids
 from .models import Contact, Listing, Pricing, SearchPage
 from .proxy import Proxy
 from .query import Range, SearchQuery
@@ -45,6 +45,7 @@ __all__ = [
     "Proxy",
     "geocode",
     "resolve_insee",
+    "resolve_place_ids",
     "Place",
     "Listing",
     "ListingDetail",

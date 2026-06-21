@@ -17,6 +17,10 @@ from .config import DEFAULT_USER_AGENT
 AUTOCOMPLETE_URL = (
     "https://autocomplete.svc.groupe-seloger.com/api/v3.0/auto/complete/fra/63/10/8/SeLoger"
 )
+# Résolution des identifiants géographiques « place IDs » (ex. AD08FR31096)
+# utilisés dans les URLs /classified-search vers des codes postaux.
+PLACES_DATA_URL = "https://www.seloger.com/search-mfe-bff/places/data"
+_PLACE_PARENT_TYPES = ["NBH2", "AD08", "AD06", "AD04", "STRT", "AD02"]
 
 
 @dataclass(slots=True)
@@ -93,3 +97,39 @@ def resolve_insee(text: str, **kwargs) -> int | None:
     """Raccourci : code INSEE de la meilleure correspondance pour ``text``."""
     places = geocode(text, **kwargs)
     return places[0].insee_code if places else None
+
+
+def resolve_place_ids(
+    place_ids: list[str],
+    *,
+    client: httpx.Client | None = None,
+    timeout: float = 15.0,
+) -> dict[str, dict]:
+    """Résout des « place IDs » SeLoger (ex. ``AD08FR31096``) en codes postaux.
+
+    Ces identifiants apparaissent dans les URLs ``/classified-search?...locations=``.
+    Retourne ``{place_id: {"labels": [...], "postal_codes": [...]}}``.
+    """
+    if not place_ids:
+        return {}
+    owns_client = client is None
+    client = client or httpx.Client(
+        headers={"User-Agent": DEFAULT_USER_AGENT, "Accept": "application/json"},
+        timeout=timeout,
+        follow_redirects=True,
+    )
+    try:
+        params = [("placesIds[]", pid) for pid in place_ids]
+        params += [("parentTypes[]", t) for t in _PLACE_PARENT_TYPES]
+        resp = client.get(PLACES_DATA_URL, params=params)
+        resp.raise_for_status()
+        out: dict[str, dict] = {}
+        for place in (resp.json() or {}).get("places") or []:
+            out[place.get("placeId")] = {
+                "labels": place.get("labels") or [],
+                "postal_codes": [str(c) for c in place.get("postal_codes") or []],
+            }
+        return out
+    finally:
+        if owns_client:
+            client.close()

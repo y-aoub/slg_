@@ -78,17 +78,29 @@ class SearchQuery:
         default_factory=lambda: [Nature.OLD, Nature.NEW, Nature.PROJECT]
     )
     insee_codes: list[int] = field(default_factory=list)
+    postal_codes: list[str] = field(default_factory=list)
     enterprise: bool = False
     price: Range = field(default_factory=Range)
     surface: Range = field(default_factory=Range)
     rooms_min: int | None = None
     bedrooms_min: int | None = None
 
+    # ----- lieux ----------------------------------------------------------------
+
+    def _places(self) -> list[dict]:
+        """Construit le tableau ``places`` (inseeCodes et/ou postalCodes)."""
+        place: dict = {}
+        if self.insee_codes:
+            place["inseeCodes"] = self.insee_codes
+        if self.postal_codes:
+            place["postalCodes"] = self.postal_codes
+        return [place] if place else []
+
     # ----- sérialisation querystring (list.htm, SSR) ---------------------------
 
     def to_querystring(self, page: int = 1) -> str:
         """Construit la querystring de ``list.htm`` pour la page demandée."""
-        places = [{"inseeCodes": self.insee_codes}] if self.insee_codes else []
+        places = self._places()
         params: list[tuple[str, str]] = [
             ("projects", str(int(self.project))),
             ("types", ",".join(str(int(t)) for t in self.estate_types)),
@@ -118,7 +130,7 @@ class SearchQuery:
             "projects": [int(self.project)],
             "types": [int(t) for t in self.estate_types],
             "natures": [int(n) for n in self.natures],
-            "places": [{"inseeCodes": self.insee_codes}] if self.insee_codes else [],
+            "places": self._places(),
             "textCriteria": [],
             "mandatoryCommodities": False,
         }
