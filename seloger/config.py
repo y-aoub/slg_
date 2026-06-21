@@ -46,6 +46,7 @@ class ScraperConfig:
     max_retries: int = 3
     min_delay: float = 1.0
     max_delay: float = 3.0
+    concurrency: int = 8   # requêtes simultanées max (client async uniquement)
     proxy: Proxy | str | None = None
 
     def __post_init__(self) -> None:

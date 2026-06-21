@@ -16,6 +16,8 @@ Exemple :
 
 from __future__ import annotations
 
+from .aclient import AsyncSelogerClient
+from .ascraper import AsyncSelogerScraper
 from .config import ScraperConfig
 from .detail import DetailContact, ListingDetail
 from .exceptions import (
@@ -34,6 +36,8 @@ __version__ = "0.1.0"
 
 __all__ = [
     "SelogerScraper",
+    "AsyncSelogerScraper",
+    "AsyncSelogerClient",
     "ScraperConfig",
     "SearchQuery",
     "Range",
