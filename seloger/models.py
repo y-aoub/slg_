@@ -161,6 +161,7 @@ class Listing:
         return {
             "id": self.id,
             "title": self.title,
+            "description": self.description,
             "estate_type": self.estate_type,
             "transaction_type_id": self.transaction_type_id,
             "price": self.pricing.raw_price,
