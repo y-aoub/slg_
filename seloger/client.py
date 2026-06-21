@@ -147,6 +147,29 @@ class SelogerClient:
         )
         return resp.text
 
+    def post_externaldata(self, body: dict, from_: int, size: int = 25) -> dict:
+        """POST ``/search-bff/api/externaldata?from=&size=`` → page d'annonces.
+
+        C'est l'endpoint de **pagination** des annonces (le SSR de ``list.htm`` ne
+        rend que la 1ʳᵉ page). Nécessite une session amorcée (un GET ``list.htm``
+        préalable pose le contexte Datadome).
+        """
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Origin": self.config.base_url,
+            "Referer": f"{self.config.base_url}/list.htm",
+        }
+        if self._datadome:
+            headers["x-datadome-clientid"] = self._datadome
+        resp = self._request(
+            "POST",
+            f"/search-bff/api/externaldata?from={from_}&size={size}",
+            json=body,
+            headers=headers,
+        )
+        return resp.json()
+
     def post_christie_count(self, body: dict) -> dict:
         """POST ``/search-bff/christie/count`` → ``{nb, aggregations, ...}``.
 

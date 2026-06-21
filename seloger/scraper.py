@@ -10,7 +10,7 @@ from .client import SelogerClient
 from .config import ScraperConfig
 from .detail import ListingDetail
 from .models import Listing, SearchPage
-from .parser import parse_listing_detail, parse_search_page
+from .parser import parse_externaldata, parse_listing_detail, parse_search_page
 from .query import SearchQuery
 
 logger = logging.getLogger("seloger.scraper")
@@ -98,16 +98,17 @@ class SelogerScraper:
         Yields:
             Les :class:`Listing` dédupliquées par ``id``.
         """
+        # Page 1 vient du SSR (amorce aussi la session Datadome pour externaldata).
         first = self.search_page(query, page=1)
         seen: set[int] = set()
 
-        def emit(page: SearchPage) -> Iterator[Listing]:
-            for listing in page.listings:
+        def emit(listings: list[Listing]) -> Iterator[Listing]:
+            for listing in listings:
                 if listing.id not in seen:
                     seen.add(listing.id)
                     yield listing
 
-        yield from emit(first)
+        yield from emit(first.listings)
 
         per_page = first.pagination.results_per_page or 25
         reachable = min(first.total_count, first.pagination.max_results or HARD_RESULT_CAP)
@@ -115,8 +116,12 @@ class SelogerScraper:
         if max_pages is not None:
             last_page = min(last_page, max_pages)
 
+        # Pages 2+ via l'API de pagination externaldata (le SSR ne rend que la 1ʳᵉ).
+        body = query.to_christie_body()
         for page_num in range(2, last_page + 1):
-            yield from emit(self.search_page(query, page=page_num))
+            data = self._client.post_externaldata(body, from_=(page_num - 1) * per_page, size=per_page)
+            listings, _ = parse_externaldata(data)
+            yield from emit(listings)
 
         if first.total_count > HARD_RESULT_CAP:
             logger.warning(

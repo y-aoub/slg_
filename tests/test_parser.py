@@ -84,3 +84,23 @@ def test_parse_filters_ads_and_reads_fields(sample_data):
 def test_missing_initial_data_raises():
     with pytest.raises(ParseError):
         extract_initial_data("<html>challenge datadome</html>")
+
+
+def test_parse_externaldata():
+    from seloger.parser import parse_externaldata
+
+    data = {
+        "listingData": {
+            "count": 5917,
+            "cards": [
+                {"type": 0, "listing": {"id": 111, "title": "Appartement", "surface": 31,
+                                        "pricing": {"rawPrice": "1400"}}},
+                {"type": 5, "nativeAdvertising": {"highlightingLevel": 2}},  # pub -> ignorée
+                {"type": 0, "listing": {"id": 222, "title": "Studio"}},
+            ],
+        }
+    }
+    listings, count = parse_externaldata(data)
+    assert count == 5917
+    assert [l.id for l in listings] == [111, 222]      # la pub est filtrée
+    assert listings[0].pricing.raw_price == 1400

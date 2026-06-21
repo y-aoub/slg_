@@ -110,6 +110,24 @@ class AsyncSelogerClient:
         )
         return resp.text
 
+    async def apost_externaldata(self, body: dict, from_: int, size: int = 25) -> dict:
+        """POST ``/search-bff/api/externaldata`` (pagination des annonces)."""
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Origin": self.config.base_url,
+            "Referer": f"{self.config.base_url}/list.htm",
+        }
+        if self._datadome:
+            headers["x-datadome-clientid"] = self._datadome
+        resp = await self._arequest(
+            "POST",
+            f"/search-bff/api/externaldata?from={from_}&size={size}",
+            json=body,
+            headers=headers,
+        )
+        return resp.json()
+
     async def apost_christie_count(self, body: dict) -> dict:
         datadome = self.config.require_datadome()
         resp = await self._arequest(

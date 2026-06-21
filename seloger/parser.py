@@ -89,6 +89,23 @@ def parse_search_page(html: str) -> SearchPage:
     )
 
 
+def parse_externaldata(data: dict) -> tuple[list[Listing], int]:
+    """Parse une réponse de ``/search-bff/api/externaldata`` (pagination).
+
+    Retourne ``(listings, total_count)``. Les cartes pub (``type != 0``) sont
+    ignorées ; chaque carte réelle est sous ``card["listing"]``.
+    """
+    listing_data = data.get("listingData") or {}
+    cards = listing_data.get("cards") or []
+    listings = [
+        Listing.from_card(c["listing"])
+        for c in cards
+        if c.get("type") == 0 and isinstance(c.get("listing"), dict)
+        and isinstance(c["listing"].get("id"), int)
+    ]
+    return listings, int(listing_data.get("count", 0))
+
+
 def extract_detail_data(html: str) -> dict:
     """Extrait l'objet ``classified`` depuis le HTML d'une page de détail."""
     match = _DETAIL_DATA_RE.search(html)

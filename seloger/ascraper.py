@@ -23,7 +23,7 @@ from .aclient import AsyncSelogerClient
 from .config import ScraperConfig
 from .detail import ListingDetail
 from .models import Listing, SearchPage
-from .parser import parse_listing_detail, parse_search_page
+from .parser import parse_externaldata, parse_listing_detail, parse_search_page
 from .query import SearchQuery
 from .scraper import HARD_RESULT_CAP
 
@@ -54,11 +54,19 @@ class AsyncSelogerScraper:
         html = await self._client.aget_list_html(query.to_querystring(page=page))
         return parse_search_page(html)
 
+    async def _apage_listings(self, body: dict, page_num: int, per_page: int) -> list[Listing]:
+        data = await self._client.apost_externaldata(
+            body, from_=(page_num - 1) * per_page, size=per_page
+        )
+        listings, _ = parse_externaldata(data)
+        return listings
+
     async def asearch(
         self, query: SearchQuery, max_pages: int | None = None
     ) -> list[Listing]:
-        """Récupère les annonces : page 1 d'abord, puis les autres **en parallèle**."""
-        first = await self.asearch_page(query, page=1)
+        """Récupère les annonces : page 1 (SSR, amorce la session) puis les pages
+        suivantes via l'API ``externaldata`` **en parallèle**."""
+        first = await self.asearch_page(query, page=1)  # amorce la session Datadome
 
         per_page = first.pagination.results_per_page or 25
         reachable = min(first.total_count, first.pagination.max_results or HARD_RESULT_CAP)
@@ -66,22 +74,23 @@ class AsyncSelogerScraper:
         if max_pages is not None:
             last_page = min(last_page, max_pages)
 
-        pages = [first]
+        page_lists: list[list[Listing]] = [first.listings]
         if last_page > 1:
+            body = query.to_christie_body()
             rest = await asyncio.gather(
-                *(self.asearch_page(query, page=p) for p in range(2, last_page + 1)),
+                *(self._apage_listings(body, p, per_page) for p in range(2, last_page + 1)),
                 return_exceptions=True,
             )
-            for p in rest:
-                if isinstance(p, SearchPage):
-                    pages.append(p)
+            for r in rest:
+                if isinstance(r, list):
+                    page_lists.append(r)
                 else:
-                    logger.warning("Échec d'une page : %s", p)
+                    logger.warning("Échec d'une page : %s", r)
 
         seen: set[int] = set()
         listings: list[Listing] = []
-        for page in pages:
-            for listing in page.listings:
+        for page_listings in page_lists:
+            for listing in page_listings:
                 if listing.id not in seen:
                     seen.add(listing.id)
                     listings.append(listing)
