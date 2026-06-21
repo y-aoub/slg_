@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Données de recherche / fixtures lourdes & secrets
+.research/
+*.html
+results*.json
+.env
+
+# Tunnel / config locale
+tunnel.sh
+
+# Artefacts harness / éditeur
+.claude/
+.vscode/

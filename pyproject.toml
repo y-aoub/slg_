@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "slg"
+version = "0.1.0"
+description = "Unofficial scraper for the SeLoger real-estate listings (SSR + christie API)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Étienne Hodé", email = "yaoub.elh@gmail.com" },
+]
+keywords = ["slg_", "seloger", "scraper", "immobilier"]
+dependencies = [
+    "httpx>=0.27",
+]
+
+[project.urls]
+Homepage = "https://github.com/y-aoub/slg_"
+Repository = "https://github.com/y-aoub/slg_"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+seloger = "seloger.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["seloger*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
