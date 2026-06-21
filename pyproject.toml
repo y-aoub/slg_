@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "slg"
 version = "0.1.0"
 description = "Unofficial scraper for the SeLoger real-estate listings (SSR + christie API)"
-readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
