@@ -22,6 +22,7 @@ from .config import ScraperConfig
 from .detail import DetailContact, ListingDetail
 from .exceptions import (
     DatadomeBlocked,
+    ListingUnavailable,
     ParseError,
     RateLimited,
     SelogerError,
@@ -53,6 +54,7 @@ __all__ = [
     "SearchPage",
     "SelogerError",
     "DatadomeBlocked",
+    "ListingUnavailable",
     "ParseError",
     "RateLimited",
     "__version__",

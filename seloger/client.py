@@ -9,7 +9,7 @@ import time
 import httpx
 
 from .config import ScraperConfig
-from .exceptions import DatadomeBlocked, RateLimited, SelogerError
+from .exceptions import DatadomeBlocked, ListingUnavailable, RateLimited, SelogerError
 
 logger = logging.getLogger("seloger.client")
 
@@ -90,10 +90,14 @@ class SelogerClient:
                 continue
 
             if resp.status_code in _DATADOME_STATUS or self._looks_blocked(resp):
-                raise DatadomeBlocked(
+                # Souvent transitoire (cookie Datadome posé puis réutilisé) :
+                # on retente avec backoff, on ne lève qu'après épuisement.
+                last_exc = DatadomeBlocked(
                     f"Bloqué par Datadome ({resp.status_code}) sur {url}. "
-                    "Rafraîchis le cookie datadome depuis la session navigateur."
+                    "Rafraîchis le cookie datadome ou utilise un proxy résidentiel."
                 )
+                self._backoff(attempt, base=1.5)
+                continue
             if resp.status_code == 429:
                 logger.warning("429 Too Many Requests (tentative %d)", attempt)
                 last_exc = RateLimited(url)
@@ -104,6 +108,8 @@ class SelogerClient:
                 last_exc = SelogerError(f"HTTP {resp.status_code}")
                 self._backoff(attempt)
                 continue
+            if resp.status_code in (404, 410):
+                raise ListingUnavailable(f"Annonce indisponible ({resp.status_code}) : {url}")
 
             resp.raise_for_status()
             return resp

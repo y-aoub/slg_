@@ -5,8 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 
-from seloger import AsyncSelogerScraper, ScraperConfig
+import httpx
+
+from seloger import AsyncSelogerClient, AsyncSelogerScraper, ScraperConfig
 from seloger.detail import ListingDetail
+from seloger.exceptions import ListingUnavailable
 
 from .test_detail import CLASSIFIED, _make_detail_html
 
@@ -52,3 +55,22 @@ def test_aget_listing_parses():
     assert detail.legacy_id == 211815093
     assert detail.url.endswith("211815093.htm")
     assert len(detail.photos) == 2
+
+
+def test_410_raises_listing_unavailable():
+    """Une annonce supprimée (HTTP 410) lève ListingUnavailable (pas une erreur brute)."""
+    async def run():
+        client = AsyncSelogerClient(ScraperConfig())
+        client._client = httpx.AsyncClient(
+            base_url="https://www.seloger.com",
+            transport=httpx.MockTransport(lambda req: httpx.Response(410, text="Annonce supprimée")),
+        )
+        try:
+            await client.aget_detail_html("/annonces/x/238055841.htm")
+            return "no-exception"
+        except ListingUnavailable:
+            return "unavailable"
+        finally:
+            await client.aclose()
+
+    assert asyncio.run(run()) == "unavailable"

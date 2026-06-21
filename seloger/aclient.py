@@ -15,7 +15,7 @@ import httpx
 
 from .client import _DATADOME_STATUS, _RETRYABLE_STATUS, SelogerClient
 from .config import ScraperConfig
-from .exceptions import DatadomeBlocked, RateLimited, SelogerError
+from .exceptions import DatadomeBlocked, ListingUnavailable, RateLimited, SelogerError
 
 logger = logging.getLogger("seloger.aclient")
 
@@ -72,9 +72,13 @@ class AsyncSelogerClient:
                     continue
 
             if resp.status_code in _DATADOME_STATUS or SelogerClient._looks_blocked(resp):
-                raise DatadomeBlocked(
+                # Souvent transitoire : le cookie Datadome posé par les requêtes
+                # réussies est réutilisé (jar partagé) → on retente avec backoff.
+                last_exc = DatadomeBlocked(
                     f"Bloqué par Datadome ({resp.status_code}) sur {url}."
                 )
+                await asyncio.sleep(1.5 * (2 ** (attempt - 1)) + random.random())
+                continue
             if resp.status_code == 429:
                 last_exc = RateLimited(url)
                 await asyncio.sleep(5 * (2 ** (attempt - 1)) + random.random())
@@ -83,6 +87,8 @@ class AsyncSelogerClient:
                 last_exc = SelogerError(f"HTTP {resp.status_code}")
                 await asyncio.sleep(2 ** (attempt - 1) + random.random())
                 continue
+            if resp.status_code in (404, 410):
+                raise ListingUnavailable(f"Annonce indisponible ({resp.status_code}) : {url}")
 
             resp.raise_for_status()
             return resp
