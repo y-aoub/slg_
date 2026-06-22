@@ -171,21 +171,16 @@ class SelogerClient:
         return resp.json()
 
     def post_christie_count(self, body: dict) -> dict:
-        """POST ``/search-bff/christie/count`` → ``{nb, aggregations, ...}``.
-
-        Nécessite un cookie Datadome (réutilisé comme header ``x-datadome-clientid``).
-        """
-        datadome = self.config.require_datadome()
+        """POST ``/search-bff/christie/count`` → ``{nb, aggregations, ...}``."""
+        headers = {
+            "Accept": "*/*",
+            "Content-Type": "application/json",
+            "Origin": self.config.base_url,
+            "Referer": f"{self.config.base_url}/list.htm",
+        }
+        if self._datadome:
+            headers["x-datadome-clientid"] = self._datadome
         resp = self._request(
-            "POST",
-            "/search-bff/christie/count",
-            json=body,
-            headers={
-                "Accept": "*/*",
-                "Content-Type": "application/json",
-                "Origin": self.config.base_url,
-                "Referer": f"{self.config.base_url}/list.htm",
-                "x-datadome-clientid": datadome,
-            },
+            "POST", "/search-bff/christie/count", json=body, headers=headers
         )
         return resp.json()

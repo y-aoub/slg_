@@ -129,15 +129,15 @@ class AsyncSelogerClient:
         return resp.json()
 
     async def apost_christie_count(self, body: dict) -> dict:
-        datadome = self.config.require_datadome()
+        headers = {
+            "Accept": "*/*",
+            "Content-Type": "application/json",
+            "Origin": self.config.base_url,
+            "Referer": f"{self.config.base_url}/list.htm",
+        }
+        if self._datadome:
+            headers["x-datadome-clientid"] = self._datadome
         resp = await self._arequest(
-            "POST", "/search-bff/christie/count", json=body,
-            headers={
-                "Accept": "*/*",
-                "Content-Type": "application/json",
-                "Origin": self.config.base_url,
-                "Referer": f"{self.config.base_url}/list.htm",
-                "x-datadome-clientid": datadome,
-            },
+            "POST", "/search-bff/christie/count", json=body, headers=headers
         )
         return resp.json()

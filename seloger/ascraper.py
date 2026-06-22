@@ -18,16 +18,20 @@ import asyncio
 import logging
 import math
 from collections.abc import Iterable
+from dataclasses import replace
 
 from .aclient import AsyncSelogerClient
 from .config import ScraperConfig
 from .detail import ListingDetail
 from .models import Listing, SearchPage
 from .parser import parse_externaldata, parse_listing_detail, parse_search_page
-from .query import SearchQuery
+from .query import Range, SearchQuery
 from .scraper import HARD_RESULT_CAP
 
 logger = logging.getLogger("seloger.ascraper")
+
+# Plafonds de prix par défaut pour le découpage (loyer mensuel vs prix de vente).
+_PRICE_CEILING = {1: 100_000, 2: 100_000_000}  # ProjectType RENT=1, BUY=2
 
 
 class AsyncSelogerScraper:
@@ -49,6 +53,46 @@ class AsyncSelogerScraper:
     async def acount(self, query: SearchQuery) -> int:
         data = await self._client.apost_christie_count(query.to_christie_body())
         return int(data.get("nb", 0))
+
+    # ----- découpage par prix (contourner le plafond de 2500) ------------------
+
+    async def asplit_by_price(
+        self, query: SearchQuery, cap: int = HARD_RESULT_CAP
+    ) -> list[SearchQuery]:
+        """Découpe une recherche en sous-intervalles de prix, chacun ``<= cap``.
+
+        SeLoger plafonne une recherche à ~2500 résultats. En scindant la plage de
+        prix (dichotomie guidée par ``count``), on couvre l'intégralité des annonces.
+        Retourne la liste des sous-requêtes (une seule si le total tient sous le cap).
+        """
+        total = await self.acount(query)
+        if total <= cap:
+            return [query]
+        lo = query.price.min if query.price.min is not None else 0
+        ceiling = _PRICE_CEILING.get(int(query.project), 100_000_000)
+        hi = query.price.max if query.price.max is not None else ceiling
+        intervals = await self._split_price(query, lo, hi, cap)
+        logger.info(
+            "%d annonces > plafond %d : découpé en %d intervalle(s) de prix.",
+            total, cap, len(intervals),
+        )
+        return intervals
+
+    async def _split_price(
+        self, query: SearchQuery, lo: int, hi: int, cap: int, depth: int = 0
+    ) -> list[SearchQuery]:
+        sub = replace(query, price=Range(min=lo or None, max=hi))
+        count = await self.acount(sub)
+        if count == 0:
+            return []
+        if count <= cap or hi - lo <= 1 or depth >= 24:
+            return [sub]
+        mid = (lo + hi) // 2
+        left, right = await asyncio.gather(
+            self._split_price(query, lo, mid, cap, depth + 1),
+            self._split_price(query, mid + 1, hi, cap, depth + 1),
+        )
+        return left + right
 
     async def asearch_page(self, query: SearchQuery, page: int = 1) -> SearchPage:
         html = await self._client.aget_list_html(query.to_querystring(page=page))

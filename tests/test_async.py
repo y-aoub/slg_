@@ -7,7 +7,7 @@ import json
 
 import httpx
 
-from seloger import AsyncSelogerClient, AsyncSelogerScraper, ScraperConfig
+from seloger import AsyncSelogerClient, AsyncSelogerScraper, ScraperConfig, SearchQuery
 from seloger.detail import ListingDetail
 from seloger.exceptions import ListingUnavailable
 
@@ -55,6 +55,30 @@ def test_aget_listing_parses():
     assert detail.legacy_id == 211815093
     assert detail.url.endswith("211815093.htm")
     assert len(detail.photos) == 2
+
+
+def test_asplit_by_price_stays_under_cap():
+    """Le découpage par prix produit des intervalles tous <= cap, et couvre tout."""
+    async def run():
+        scraper = AsyncSelogerScraper(ScraperConfig())
+
+        # Distribution synthétique : 6000 annonces uniformément réparties sur 0..3000 €.
+        async def fake_count(query):
+            lo = query.price.min or 0
+            hi = query.price.max if query.price.max is not None else 3000
+            lo, hi = max(lo, 0), min(hi, 3000)
+            return round(6000 * (hi - lo) / 3000) if hi > lo else 0
+
+        scraper.acount = fake_count
+        subs = await scraper.asplit_by_price(SearchQuery(insee_codes=[1]), cap=2500)
+        counts = [await fake_count(s) for s in subs]
+        await scraper.aclose()
+        return subs, counts
+
+    subs, counts = asyncio.run(run())
+    assert len(subs) > 1                       # 6000 > 2500 -> découpé
+    assert all(c <= 2500 for c in counts)      # chaque intervalle sous le plafond
+    assert sum(counts) >= 5900                 # couverture quasi totale
 
 
 def test_410_raises_listing_unavailable():
