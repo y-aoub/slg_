@@ -43,6 +43,28 @@ class AsyncSelogerClient:
         )
         self._datadome = datadome
         self._sem = asyncio.Semaphore(max(1, self.config.concurrency))
+        self._primed = False
+        self._prime_lock = asyncio.Lock()
+
+    # ----- amorçage de session (pour l'API externaldata) -----------------------
+
+    async def _ensure_primed(self) -> None:
+        """Amorce la session Datadome avec une requête HTML minuscule (robots.txt).
+
+        L'API ``externaldata`` refuse (403) une session « froide » ; un premier
+        GET sur le domaine suffit à l'autoriser. On évite ainsi tout fetch du gros
+        HTML de ``list.htm`` (≈1 Mo) : un seul amorçage de ~1,6 Ko par session.
+        """
+        if self._primed:
+            return
+        async with self._prime_lock:
+            if self._primed:
+                return
+            try:
+                await self._client.get("/robots.txt", headers={"Accept": "text/plain"})
+            except httpx.HTTPError:
+                pass  # best-effort : externaldata signalera un éventuel blocage
+            self._primed = True
 
     # ----- context manager -----------------------------------------------------
 
@@ -112,6 +134,7 @@ class AsyncSelogerClient:
 
     async def apost_externaldata(self, body: dict, from_: int, size: int = 25) -> dict:
         """POST ``/search-bff/api/externaldata`` (pagination des annonces)."""
+        await self._ensure_primed()
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",

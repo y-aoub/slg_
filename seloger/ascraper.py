@@ -98,36 +98,35 @@ class AsyncSelogerScraper:
         html = await self._client.aget_list_html(query.to_querystring(page=page))
         return parse_search_page(html)
 
-    async def _apage_listings(self, body: dict, page_num: int, per_page: int) -> list[Listing]:
-        data = await self._client.apost_externaldata(
-            body, from_=(page_num - 1) * per_page, size=per_page
-        )
-        listings, _ = parse_externaldata(data)
-        return listings
+    async def _apage(self, body: dict, from_: int, per_page: int) -> tuple[list[Listing], int]:
+        data = await self._client.apost_externaldata(body, from_=from_, size=per_page)
+        return parse_externaldata(data)
 
     async def asearch(
         self, query: SearchQuery, max_pages: int | None = None
     ) -> list[Listing]:
-        """Récupère les annonces : page 1 (SSR, amorce la session) puis les pages
-        suivantes via l'API ``externaldata`` **en parallèle**."""
-        first = await self.asearch_page(query, page=1)  # amorce la session Datadome
+        """Récupère les annonces **uniquement via l'API JSON** ``externaldata``
+        (aucun fetch HTML) : 1ʳᵉ page → total, puis les pages suivantes **en parallèle**."""
+        per_page = 25
+        body = query.to_christie_body()
 
-        per_page = first.pagination.results_per_page or 25
-        reachable = min(first.total_count, first.pagination.max_results or HARD_RESULT_CAP)
+        first, total = await self._apage(body, from_=0, per_page=per_page)  # amorce + page 1
+
+        reachable = min(total, HARD_RESULT_CAP)
         last_page = math.ceil(reachable / per_page) if per_page else 1
         if max_pages is not None:
             last_page = min(last_page, max_pages)
 
-        page_lists: list[list[Listing]] = [first.listings]
+        page_lists: list[list[Listing]] = [first]
         if last_page > 1:
-            body = query.to_christie_body()
             rest = await asyncio.gather(
-                *(self._apage_listings(body, p, per_page) for p in range(2, last_page + 1)),
+                *(self._apage(body, from_=(p - 1) * per_page, per_page=per_page)
+                  for p in range(2, last_page + 1)),
                 return_exceptions=True,
             )
             for r in rest:
-                if isinstance(r, list):
-                    page_lists.append(r)
+                if isinstance(r, tuple):
+                    page_lists.append(r[0])
                 else:
                     logger.warning("Échec d'une page : %s", r)
 
@@ -139,10 +138,10 @@ class AsyncSelogerScraper:
                     seen.add(listing.id)
                     listings.append(listing)
 
-        if first.total_count > HARD_RESULT_CAP:
+        if total > HARD_RESULT_CAP:
             logger.warning(
                 "%d annonces au total mais SeLoger plafonne à %d : affine les filtres.",
-                first.total_count, HARD_RESULT_CAP,
+                total, HARD_RESULT_CAP,
             )
         return listings
 

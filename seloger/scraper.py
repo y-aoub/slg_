@@ -98,9 +98,10 @@ class SelogerScraper:
         Yields:
             Les :class:`Listing` dédupliquées par ``id``.
         """
-        # Page 1 vient du SSR (amorce aussi la session Datadome pour externaldata).
-        first = self.search_page(query, page=1)
+        # 100% JSON via externaldata (aucun fetch HTML ; session amorcée par robots.txt).
         seen: set[int] = set()
+        per_page = 25
+        body = query.to_christie_body()
 
         def emit(listings: list[Listing]) -> Iterator[Listing]:
             for listing in listings:
@@ -108,22 +109,21 @@ class SelogerScraper:
                     seen.add(listing.id)
                     yield listing
 
-        yield from emit(first.listings)
+        first_data = self._client.post_externaldata(body, from_=0, size=per_page)
+        first_listings, total_count = parse_externaldata(first_data)
+        yield from emit(first_listings)
 
-        per_page = first.pagination.results_per_page or 25
-        reachable = min(first.total_count, first.pagination.max_results or HARD_RESULT_CAP)
+        reachable = min(total_count, HARD_RESULT_CAP)
         last_page = math.ceil(reachable / per_page) if per_page else 1
         if max_pages is not None:
             last_page = min(last_page, max_pages)
 
-        # Pages 2+ via l'API de pagination externaldata (le SSR ne rend que la 1ʳᵉ).
-        body = query.to_christie_body()
         for page_num in range(2, last_page + 1):
             data = self._client.post_externaldata(body, from_=(page_num - 1) * per_page, size=per_page)
             listings, _ = parse_externaldata(data)
             yield from emit(listings)
 
-        if first.total_count > HARD_RESULT_CAP:
+        if total_count > HARD_RESULT_CAP:
             logger.warning(
                 "%d annonces au total mais SeLoger plafonne à %d : affine les filtres "
                 "(prix, surface, arrondissement) pour tout couvrir.",

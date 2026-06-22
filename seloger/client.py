@@ -52,6 +52,17 @@ class SelogerClient:
         )
         self._datadome = datadome
         self._last_request_at = 0.0
+        self._primed = False
+
+    def _ensure_primed(self) -> None:
+        """Amorce la session (robots.txt) pour autoriser l'API externaldata."""
+        if self._primed:
+            return
+        try:
+            self._client.get("/robots.txt", headers={"Accept": "text/plain"})
+        except httpx.HTTPError:
+            pass
+        self._primed = True
 
     # ----- context manager -----------------------------------------------------
 
@@ -150,10 +161,10 @@ class SelogerClient:
     def post_externaldata(self, body: dict, from_: int, size: int = 25) -> dict:
         """POST ``/search-bff/api/externaldata?from=&size=`` → page d'annonces.
 
-        C'est l'endpoint de **pagination** des annonces (le SSR de ``list.htm`` ne
-        rend que la 1ʳᵉ page). Nécessite une session amorcée (un GET ``list.htm``
-        préalable pose le contexte Datadome).
+        Endpoint de **pagination** des annonces (JSON). La session est amorcée
+        automatiquement (robots.txt) pour éviter le 403 « session froide ».
         """
+        self._ensure_primed()
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
